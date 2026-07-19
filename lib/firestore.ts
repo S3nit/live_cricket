@@ -41,12 +41,19 @@ function withId<T extends object>(id: string, data: Record<string, unknown>): T 
 }
 
 function dbAssert() {
-  if (!db) throw new Error("Firebase is not configured");
   return db;
+}
+
+function noop() {
+  return undefined;
 }
 
 export function subscribeTournaments(callback: (items: Tournament[]) => void) {
   const database = dbAssert();
+  if (!database) {
+    callback([]);
+    return noop;
+  }
   return onSnapshot(collection(database, "tournaments"), (snap) => {
     callback(snap.docs.map((d) => withId<Tournament>(d.id, d.data())));
   });
@@ -54,18 +61,30 @@ export function subscribeTournaments(callback: (items: Tournament[]) => void) {
 
 export function subscribeTeams(tournamentId: string, callback: (items: Team[]) => void) {
   const database = dbAssert();
+  if (!database) {
+    callback([]);
+    return noop;
+  }
   const teamsRef = collection(database, "tournaments", tournamentId, "teams");
   return onSnapshot(teamsRef, (snap) => callback(snap.docs.map((d) => withId<Team>(d.id, d.data()))));
 }
 
 export function subscribePlayers(tournamentId: string, callback: (items: Player[]) => void) {
   const database = dbAssert();
+  if (!database) {
+    callback([]);
+    return noop;
+  }
   const playersRef = collection(database, "tournaments", tournamentId, "players");
   return onSnapshot(playersRef, (snap) => callback(snap.docs.map((d) => withId<Player>(d.id, d.data()))));
 }
 
 export function subscribeMatches(tournamentId: string, callback: (items: Match[]) => void) {
   const database = dbAssert();
+  if (!database) {
+    callback([]);
+    return noop;
+  }
   const matchesRef = query(
     collection(database, "tournaments", tournamentId, "matches"),
     orderBy("scheduledAt", "asc"),
@@ -79,6 +98,10 @@ export function subscribeMatch(
   callback: (item: Match | null) => void,
 ) {
   const database = dbAssert();
+  if (!database) {
+    callback(null);
+    return noop;
+  }
   return onSnapshot(doc(database, "tournaments", tournamentId, "matches", matchId), (snap) => {
     callback(snap.exists() ? withId<Match>(snap.id, snap.data()) : null);
   });
@@ -91,6 +114,10 @@ export function subscribeInnings(
   callback: (inning: Innings | null) => void,
 ) {
   const database = dbAssert();
+  if (!database) {
+    callback(null);
+    return noop;
+  }
   return onSnapshot(
     doc(database, "tournaments", tournamentId, "matches", matchId, "innings", String(inningsNumber)),
     (snap) => callback(snap.exists() ? withId<Innings>(snap.id, snap.data()) : null),
@@ -105,6 +132,10 @@ export function subscribeLastBalls(
   callback: (balls: Ball[]) => void,
 ) {
   const database = dbAssert();
+  if (!database) {
+    callback([]);
+    return noop;
+  }
   const ballsRef = query(
     collection(database, "tournaments", tournamentId, "matches", matchId, "innings", String(inningsNumber), "balls"),
     orderBy("sequence", "desc"),
@@ -123,6 +154,10 @@ export function subscribeComments(
   callback: (comments: MatchComment[], cursor: unknown) => void,
 ) {
   const database = dbAssert();
+  if (!database) {
+    callback([], null);
+    return noop;
+  }
   const commentsRef = query(
     collection(database, "tournaments", tournamentId, "matches", matchId, "comments"),
     orderBy("createdAt", "desc"),
@@ -142,6 +177,7 @@ export async function loadOlderComments(
   pageSize: number,
 ): Promise<{ comments: MatchComment[]; cursor: unknown }> {
   const database = dbAssert();
+  if (!database) return { comments: [], cursor: null };
   if (!cursor) return { comments: [], cursor: null };
   const commentsRef = query(
     collection(database, "tournaments", tournamentId, "matches", matchId, "comments"),
@@ -158,6 +194,7 @@ export async function loadOlderComments(
 
 export async function upsertTournament(tournamentId: string | null, data: Omit<Tournament, "id">) {
   const database = dbAssert();
+  if (!database) return;
   const payload = { ...data, updatedAt: serverTimestamp(), createdAt: serverTimestamp() };
   if (tournamentId) {
     await updateDoc(doc(database, "tournaments", tournamentId), { ...data, updatedAt: serverTimestamp() });
@@ -168,6 +205,7 @@ export async function upsertTournament(tournamentId: string | null, data: Omit<T
 
 export async function upsertTeam(tournamentId: string, teamId: string | null, data: Omit<Team, "id">) {
   const database = dbAssert();
+  if (!database) return;
   if (teamId) {
     await updateDoc(doc(database, "tournaments", tournamentId, "teams", teamId), {
       ...data,
@@ -184,6 +222,7 @@ export async function upsertTeam(tournamentId: string, teamId: string | null, da
 
 export async function upsertPlayer(tournamentId: string, playerId: string | null, data: Omit<Player, "id">) {
   const database = dbAssert();
+  if (!database) return;
   if (playerId) {
     await updateDoc(doc(database, "tournaments", tournamentId, "players", playerId), {
       ...data,
@@ -200,6 +239,7 @@ export async function upsertPlayer(tournamentId: string, playerId: string | null
 
 export async function upsertMatch(tournamentId: string, matchId: string | null, data: Omit<Match, "id">) {
   const database = dbAssert();
+  if (!database) return;
   const payload = { ...data, updatedAt: serverTimestamp(), createdAt: serverTimestamp() };
   if (matchId) {
     await updateDoc(doc(database, "tournaments", tournamentId, "matches", matchId), {
@@ -241,6 +281,7 @@ export async function upsertMatch(tournamentId: string, matchId: string | null, 
 
 export async function deleteEntity(path: string[]) {
   const database = dbAssert();
+  if (!database) return;
   await deleteDoc(doc(database, ...path));
 }
 
@@ -250,6 +291,7 @@ export async function setPlayingXI(
   playingXI: Record<string, string[]>,
 ) {
   const database = dbAssert();
+  if (!database) return;
   await updateDoc(doc(database, "tournaments", tournamentId, "matches", matchId), {
     playingXI,
     updatedAt: serverTimestamp(),
@@ -258,6 +300,7 @@ export async function setPlayingXI(
 
 export async function setMatchStatus(tournamentId: string, matchId: string, status: Match["status"]) {
   const database = dbAssert();
+  if (!database) return;
   await updateDoc(doc(database, "tournaments", tournamentId, "matches", matchId), {
     status,
     updatedAt: serverTimestamp(),
@@ -272,6 +315,7 @@ export async function postComment(
   text: string,
 ) {
   const database = dbAssert();
+  if (!database) return;
   await addDoc(collection(database, "tournaments", tournamentId, "matches", matchId, "comments"), {
     userId,
     displayName,
@@ -295,11 +339,13 @@ export async function postComment(
 
 export async function deleteComment(tournamentId: string, matchId: string, commentId: string) {
   const database = dbAssert();
+  if (!database) return;
   await deleteDoc(doc(database, "tournaments", tournamentId, "matches", matchId, "comments", commentId));
 }
 
 export async function isAdmin(uid: string): Promise<boolean> {
   const database = dbAssert();
+  if (!database) return false;
   const snap = await getDoc(doc(database, "admins", uid));
   return snap.exists();
 }
@@ -310,6 +356,7 @@ export async function recordBall(
   input: BallInput,
 ): Promise<void> {
   const database = dbAssert();
+  if (!database) return;
   const inningsRef = doc(
     database,
     "tournaments",
@@ -363,6 +410,7 @@ export async function undoLastBall(
   inningsNumber: 1 | 2,
 ): Promise<void> {
   const database = dbAssert();
+  if (!database) return;
   const inningsRef = doc(
     database,
     "tournaments",
@@ -406,6 +454,7 @@ export async function undoLastBall(
 
 export async function getPlayersByIds(tournamentId: string, ids: string[]): Promise<Player[]> {
   const database = dbAssert();
+  if (!database) return [];
   if (!ids.length) return [];
   const chunks = ids.reduce<string[][]>((acc, id, idx) => {
     const slot = Math.floor(idx / 10);
